@@ -39,19 +39,20 @@ type Space struct {
 	store store.Store
 	vault vault.Vault
 
-	mu         sync.Mutex
-	syncing    map[string]*flight[struct{}]
-	refreshing map[string]*flight[string]
-	fetchedAt  map[string]int64
-	watching   map[string]context.CancelFunc
-	live       map[string]*liveEntry
-	logins     map[string]*login
-	quota      map[string]*quotaState
+	mu           sync.Mutex
+	syncing      map[string]*flight[struct{}]
+	refreshing   map[string]*flight[string]
+	historySends map[string]*historySend
+	fetchedAt    map[string]int64
+	watching     map[string]context.CancelFunc
+	live         map[string]*liveEntry
+	logins       map[string]*login
+	quota        map[string]*quotaState
 }
 
 func newSpace(name string, c *Club, st store.Store, v vault.Vault) *Space {
 	return &Space{name: name, club: c, store: st, vault: v, syncing: map[string]*flight[struct{}]{},
-		refreshing: map[string]*flight[string]{}, fetchedAt: map[string]int64{}, watching: map[string]context.CancelFunc{},
+		refreshing: map[string]*flight[string]{}, historySends: map[string]*historySend{}, fetchedAt: map[string]int64{}, watching: map[string]context.CancelFunc{},
 		live: map[string]*liveEntry{}, logins: map[string]*login{}, quota: map[string]*quotaState{}}
 }
 
@@ -359,8 +360,43 @@ func wantsHistory(a provider.Adapter) bool {
 	return ok && h.WantsHistory()
 }
 
+type historySend struct {
+	mu    sync.Mutex
+	users int // holders and waiters, guarded by Space.mu
+}
+
+// lockHistorySend keeps a stateless session's history read, send and store in one sequence.
+// Keep the same lock until all waiters are done, then release the map entry.
+func (s *Space) lockHistorySend(key string) func() {
+	s.mu.Lock()
+	active := s.historySends[key]
+	if active == nil {
+		active = &historySend{}
+		s.historySends[key] = active
+	}
+	active.users++
+	s.mu.Unlock()
+
+	active.mu.Lock()
+	return func() {
+		active.mu.Unlock()
+		s.mu.Lock()
+		active.users--
+		if active.users == 0 {
+			delete(s.historySends, key)
+		}
+		s.mu.Unlock()
+	}
+}
+
 // dispatch claims a pending row and hands it to the provider once.
 func (s *Space) dispatch(ctx context.Context, row store.Outbox, sess store.Session) store.Outbox {
+	adapter, _ := s.club.opts.Registry.Get(sess.Provider)
+	if wantsHistory(adapter) {
+		unlock := s.lockHistorySend(sess.SessionKey)
+		defer unlock()
+	}
+
 	// The send outlives a caller that hangs up: its outcome must still be recorded.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sendTimeout)
 	defer cancel()
