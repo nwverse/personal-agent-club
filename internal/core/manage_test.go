@@ -1049,3 +1049,55 @@ func (v *verifyingQuota) Verify(ctx context.Context, cred string) (provider.Remo
 	r.Quota = []provider.QuotaReading{{Kind: "tokens", Limit: 100, Remaining: 10}}
 	return r, err
 }
+
+func TestReplaceCredentialPreservesPauseDuringVerification(t *testing.T) {
+	e := newEnv(t, "cue")
+	ctx := context.Background()
+	account := e.pair(t, "fixture-original")
+	entered, release := make(chan struct{}), make(chan struct{})
+	e.p.mu.Lock()
+	e.p.verify = func(string) error {
+		close(entered)
+		<-release
+		return nil
+	}
+	e.p.mu.Unlock()
+
+	type result struct {
+		account protocol.Account
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		updated, err := e.space.ReplaceCredential(ctx, protocol.ReplaceCredentialParams{
+			AccountID: account.AccountID, Credential: "fixture-replacement",
+		})
+		done <- result{updated, err}
+	}()
+
+	select {
+	case <-entered:
+	case early := <-done:
+		t.Fatalf("replacement returned before verification: %v", early.err)
+	}
+	paused := true
+	updated, err := e.space.UpdateAccount(ctx, protocol.UpdateAccountParams{
+		AccountID: account.AccountID, Paused: &paused,
+	})
+	close(release)
+	got := <-done
+	if err != nil || updated.Status != protocol.AccountPaused {
+		t.Fatalf("explicit pause: status = %q, err = %v", updated.Status, err)
+	}
+	if got.err != nil || got.account.Status != protocol.AccountPaused {
+		t.Fatalf("after replacement: status = %q, err = %v", got.account.Status, got.err)
+	}
+	stored, err := e.space.Account(ctx, account.AccountID)
+	if err != nil || stored.Status != protocol.AccountPaused {
+		t.Fatalf("stored account: status = %q, err = %v", stored.Status, err)
+	}
+	cred, found, err := e.space.vault.Get(ctx, account.AccountID)
+	if err != nil || !found || cred != "fixture-replacement" {
+		t.Fatalf("replacement credential was not stored: found = %v, err = %v", found, err)
+	}
+}

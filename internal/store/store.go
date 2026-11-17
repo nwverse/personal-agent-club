@@ -37,6 +37,7 @@ type Account struct {
 // AccountPatch changes the fields that are set.
 type AccountPatch struct {
 	Status           *string
+	PreservePaused   bool // Leave a paused account's status alone when applying Status.
 	DisplayName      *string
 	LastSyncedAt     *int64
 	LastError        *string

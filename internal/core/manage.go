@@ -95,17 +95,16 @@ func (s *Space) ReplaceCredential(ctx context.Context, p protocol.ReplaceCredent
 		return protocol.Account{}, err
 	}
 	st, empty := protocol.AccountActive, ""
-	if a.Status == protocol.AccountPaused {
-		st = protocol.AccountPaused
-	}
-	if err := s.store.UpdateAccount(ctx, a.AccountID, store.AccountPatch{Status: &st, LastError: &empty}, s.now()); err != nil {
+	patch := store.AccountPatch{Status: &st, PreservePaused: true, LastError: &empty}
+	if err := s.store.UpdateAccount(ctx, a.AccountID, patch, s.now()); err != nil {
 		return protocol.Account{}, err
 	}
-	if st != protocol.AccountPaused {
+	s.notify(nil)
+	updated, err := s.Account(ctx, a.AccountID)
+	if err == nil && updated.Status != protocol.AccountPaused {
 		s.background(func(ctx context.Context) { s.sync(ctx, a.AccountID, "") })
 	}
-	s.notify(nil)
-	return s.Account(ctx, a.AccountID)
+	return updated, err
 }
 
 type liveEntry struct {

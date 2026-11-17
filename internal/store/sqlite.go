@@ -294,7 +294,11 @@ func (s *SQLite) UpdateAccount(ctx context.Context, id string, p AccountPatch, n
 		set = append(set, col+" = ?")
 		args = append(args, v)
 	}
-	if p.Status != nil {
+	switch {
+	case p.Status != nil && p.PreservePaused:
+		set = append(set, "status = CASE WHEN status = ? THEN status ELSE ? END")
+		args = append(args, protocol.AccountPaused, *p.Status)
+	case p.Status != nil:
 		add("status", *p.Status)
 	}
 	if p.DisplayName != nil {

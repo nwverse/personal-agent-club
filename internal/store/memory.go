@@ -68,7 +68,7 @@ func (m *Memory) UpdateAccount(_ context.Context, id string, p AccountPatch, now
 	if !ok {
 		return ErrNotFound
 	}
-	if p.Status != nil {
+	if p.Status != nil && (!p.PreservePaused || a.Status != protocol.AccountPaused) {
 		a.Status = *p.Status
 	}
 	if p.DisplayName != nil {

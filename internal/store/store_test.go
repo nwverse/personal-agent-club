@@ -93,8 +93,9 @@ func TestAccounts(t *testing.T) {
 			t.Fatalf("%+v", a)
 		}
 		empty := ""
-		must(t, s.UpdateAccount(ctx, acct, AccountPatch{LastError: &empty}, now+6))
-		if a, _, _ := s.Account(ctx, acct); a.LastError != "" {
+		active := protocol.AccountActive
+		must(t, s.UpdateAccount(ctx, acct, AccountPatch{Status: &active, PreservePaused: true, LastError: &empty}, now+6))
+		if a, _, _ := s.Account(ctx, acct); a.Status != paused || a.LastError != "" {
 			t.Fatalf("%+v", a)
 		}
 		if err := s.UpdateAccount(ctx, "a0000000000ff", AccountPatch{}, now); err != ErrNotFound {
