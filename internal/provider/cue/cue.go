@@ -188,14 +188,17 @@ func (a *Adapter) Send(ctx context.Context, key string, s provider.SessionRef, m
 	r := web.Request(ctx, a.client, http.MethodPost, a.origin+"/v2/task.sendMessage", map[string]string{
 		"accept": "application/json", "content-type": "application/json", "x-manus-api-key": key},
 		map[string]any{"task_id": taskID(s), "message": map[string]any{"content": msg.Text}}, 0)
-	if r.OK && web.Record(r.Data)["ok"] == true {
+	body := web.Record(r.Data)
+	if r.OK && body["ok"] == true {
 		return provider.SendResult{Status: provider.Sent}, nil
 	}
-	if !r.OK && (r.Transport || r.Status >= 500) {
+	code := web.Text(web.Record(body["error"])["code"])
+	hasErrorCode := errorCode.MatchString(code)
+	explicitRefusal := body["ok"] == false || hasErrorCode
+	if r.Transport || r.Status >= 500 || (r.Status >= 200 && r.Status < 300 && !explicitRefusal) {
 		return provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, nil
 	}
-	code := web.Text(web.Record(web.Record(r.Data)["error"])["code"])
-	if errorCode.MatchString(code) {
+	if hasErrorCode {
 		code = strings.ToUpper(code)
 	} else {
 		code = "SEND_REFUSED"

@@ -144,6 +144,12 @@ func TestSendsOnceAndReportsLostAnswersAsUnconfirmed(t *testing.T) {
 	}{
 		{"ok", providertest.Answer{Body: manus["task.sendMessage"]}, provider.SendResult{Status: provider.Sent}, ""},
 		{"lost", providertest.Answer{Drop: true}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
+		{"empty success", providertest.Answer{Body: []byte{}}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
+		{"malformed success", providertest.Answer{Body: []byte("{")}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
+		{"unrecognized success", providertest.Answer{Body: map[string]any{"unrecognized": true}}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
+		{"wrong success field type", providertest.Answer{Body: map[string]any{"ok": "false"}}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
+		{"explicit refusal with HTTP 200", providertest.Answer{Body: manus["error.invalid_argument"]}, provider.SendResult{}, "INVALID_ARGUMENT"},
+		{"explicit refusal without a code with HTTP 200", providertest.Answer{Body: map[string]any{"ok": false}}, provider.SendResult{}, "SEND_REFUSED"},
 		{"busy", providertest.Answer{Status: 502}, provider.SendResult{Status: provider.Unconfirmed, Error: "SEND_UNCONFIRMED"}, ""},
 		{"refused", providertest.Answer{Status: 400, Body: manus["error.invalid_argument"]}, provider.SendResult{}, "INVALID_ARGUMENT"},
 		{"refused without a code", providertest.Answer{Status: 400, Body: map[string]any{"ok": false}}, provider.SendResult{}, "SEND_REFUSED"},
