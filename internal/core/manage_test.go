@@ -447,6 +447,45 @@ func TestSyncReadsAtMostTwentySessionsAndRotatesQuietOnes(t *testing.T) {
 	}
 }
 
+func TestSyncRotatesColdSessionsWithTwentyHotSessions(t *testing.T) {
+	e := newEnv(t, "cue")
+	ctx := context.Background()
+	e.p.sessions = sessionsOf(25, e.nowMs()-60*60_000)
+	a := e.pair(t, "fixture-credential-1")
+	for i := range 20 {
+		key := SessionKey("cue", a.AccountID, fmt.Sprintf("s%02d", i))
+		_, err := e.space.store.UpsertMessages(ctx, key, []store.Message{{
+			SessionKey: key, ExternalID: "hot", Role: protocol.RoleAssistant,
+			Blocks: []protocol.Block{protocol.TextBlock("active")}, CreateTimeMs: e.nowMs() - 5*60_000,
+		}}, e.nowMs())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cold := map[string]bool{}
+	for round := range 10 {
+		e.p.listed = nil
+		e.advance(time.Minute)
+		e.space.SyncAll(ctx)
+		if len(e.p.listed) != 20 {
+			t.Fatalf("round %d read %d sessions, want 20", round+1, len(e.p.listed))
+		}
+		seen := map[string]bool{}
+		for _, id := range e.p.listed {
+			if seen[id] {
+				t.Fatalf("round %d read session %s twice", round+1, id)
+			}
+			seen[id] = true
+			if id >= "s20" {
+				cold[id] = true
+			}
+		}
+	}
+	if len(cold) != 5 {
+		t.Fatalf("rotation reached %d of 5 cold sessions", len(cold))
+	}
+}
+
 func TestAuthFailuresBackOffAndRefreshOnce(t *testing.T) {
 	e := newEnv(t, "cue")
 	ctx := context.Background()

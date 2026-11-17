@@ -210,8 +210,8 @@ Rules the core keeps:
   never sent again automatically (a provider that can confirm is asked, read-only); after a restart, sends that were
   in flight become `unconfirmed` too, and sends still pending go out once.
 - **Sync** follows the gateway's schedule: at most 20 sessions per round (those that moved, those active in the last
-  30 minutes, then the three read least recently); a refused credential is retried every 15 minutes, after one
-  refresh where the provider has one.
+  30 minutes, then any remaining sessions among the three read least recently, which have reserved slots); a
+  refused credential is retried every 15 minutes, after one refresh where the provider has one.
 - **Credentials** go in and never come out: no method returns one, nothing logs one.
 - **Quota** comes only from what costs nothing: the readings a provider's answers carry and any 429. `state` is `ok`
   (more than 20% left), `low` (20% or less) or `exhausted` (none left, or a 429, until its `Retry-After` or else for

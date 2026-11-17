@@ -247,7 +247,7 @@ func sessionRows(acct store.Account, remote []provider.RemoteSession) []store.Se
 
 // sessionsDue are the sessions a sync reads, at most 20, in priority order: sessions whose activity time moved (or
 // new ones), sessions with a message or send in the last 30 minutes (a bot's profile time does not move when it
-// posts), then the three read least recently.
+// posts), then other sessions among the three read least recently. The latter have reserved slots.
 func (s *Space) sessionsDue(ctx context.Context, acct store.Account, before, sessions []store.Session) ([]store.Session, error) {
 	known := map[string]bool{}
 	for _, x := range before {
@@ -276,13 +276,22 @@ func (s *Space) sessionsDue(ctx context.Context, acct store.Account, before, ses
 	})
 	s.mu.Unlock()
 	rotating = rotating[:min(len(rotating), rotatePerSync)]
+	reserved := make(map[string]bool, len(rotating))
+	for _, x := range rotating {
+		reserved[x.SessionKey] = true
+	}
 	var out []store.Session
 	seen := map[string]bool{}
 	for _, x := range slices.Concat(changed, hot, rotating) {
-		if !seen[x.SessionKey] && len(out) < sessionsPerSync {
-			seen[x.SessionKey] = true
-			out = append(out, x)
+		if seen[x.SessionKey] {
+			continue
 		}
+		if !reserved[x.SessionKey] && len(out)+len(reserved) >= sessionsPerSync {
+			continue
+		}
+		delete(reserved, x.SessionKey)
+		seen[x.SessionKey] = true
+		out = append(out, x)
 	}
 	return out, nil
 }
