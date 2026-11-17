@@ -117,3 +117,41 @@ func TestFileVault(t *testing.T) {
 		t.Fatal("a raw key file was rewritten")
 	}
 }
+
+func TestFileCheckRejectsMalformedNonce(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "missing", raw: `{"v":1,"data":""}`},
+		{name: "null", raw: `{"v":1,"nonce":null,"data":""}`},
+		{name: "short", raw: `{"v":1,"nonce":"AA==","data":""}`},
+		{name: "long", raw: `{"v":1,"nonce":"AAAAAAAAAAAAAAAAAA==","data":""}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "credentials.enc")
+			if err := os.WriteFile(path, []byte(tc.raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			v, err := OpenFile(path, make([]byte, KeySize), "default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Fatalf("Check panicked: %v", recovered)
+				}
+			}()
+			if err := v.Check(); err == nil || !strings.HasSuffix(err.Error(), "is damaged") {
+				t.Fatalf("Check error = %v, want damaged vault error", err)
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(raw) != tc.raw {
+				t.Fatal("Check changed the damaged vault")
+			}
+		})
+	}
+}

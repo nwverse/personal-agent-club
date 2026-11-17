@@ -122,6 +122,9 @@ func (f *File) read() (map[string]string, error) {
 	if err := json.Unmarshal(raw, &s); err != nil || s.Version != 1 {
 		return nil, fmt.Errorf("vault: %s is not a credentials file", f.path)
 	}
+	if len(s.Nonce) != f.aead.NonceSize() {
+		return nil, fmt.Errorf("vault: %s is damaged", f.path)
+	}
 	plain, err := f.aead.Open(nil, s.Nonce, s.Data, f.aad)
 	if err != nil {
 		return nil, fmt.Errorf("vault: %s does not open with this key", f.path)
