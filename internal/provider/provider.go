@@ -209,6 +209,14 @@ type DeviceLogin interface {
 	PollLogin(ctx context.Context, flow LoginFlow) (credential string, err error)
 }
 
+// CodeLogin is a sign-in the user approves in their own browser and finishes by pasting the authorization code the
+// approval page shows. StartLogin's URL carries no secret; the provider's state (the PKCE verifier) never leaves club.
+type CodeLogin interface {
+	StartLogin() (LoginFlow, error)
+	// CompleteLogin exchanges the pasted code for the credential.
+	CompleteLogin(ctx context.Context, flow LoginFlow, code string) (credential string, err error)
+}
+
 // Common error codes.
 const (
 	CodeAuthFailed  = "AUTH_FAILED"

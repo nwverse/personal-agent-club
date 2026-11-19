@@ -131,7 +131,7 @@ Provider requests never follow a redirect, so a credential header never goes to 
 ### As a Persona extension
 
 `persona-extension.json` is the manifest: extension id `personal-agent-club`, the agent source `pac` (providers Cue,
-Grok Bot and Groq), the Accounts page (`ui` `accounts`) and the connector `club` with the assistant's `club_agent_*`
+Grok Bot, and Groq), the Accounts page (`ui` `accounts`) and the connector `club` with the assistant's `club_agent_*`
 tools, `activation_events: on_startup`, and network access to the three providers' API hosts only. `make package`
 builds `dist/personal-agent-club-<version>.tar.gz` (manifest and the four programs), `scripts/persona-test.sh` holds
 it to the hub's own checks, and [docs/persona-install.md](docs/persona-install.md) installs it on a hub. The
@@ -188,6 +188,10 @@ camelCase, parameters in snake_case), so the extension shell passes them through
 | `club.logins.grok_bot.start` | `account_id?` (sign that account in again) | `{loginId, loginUrl}` (10 minutes; at most two waiting) |
 | `club.logins.grok_bot.poll` | `login_id`, `display_name?` | `{status: pending}` or `{status: done, account}` |
 | `club.logins.grok_bot.cancel` | `login_id` | `{}` |
+| `club.grok_bot.takeover.start` | `account_id` | `{takeoverId, phase, detail}`: begin linking that Grok Bot's own machine |
+| `club.grok_bot.takeover.status` | `takeover_id` | `{phase, detail, node, paired, ssh, waiting}`: ask the bot for the next step and where it stands |
+| `club.grok_bot.takeover.plan` | `takeover_id` | `{planId, summary, node, kind, host, alreadyLinked}`: the hub change, shown and not yet written |
+| `club.grok_bot.takeover.apply` | `takeover_id` | `{applied, detail, backup?}`: write the machine list, only after `plan`; the hub is not restarted |
 | `club.import` | `path`, `only_providers?`, `dry_run?` | `{accounts, skipped, dryRun?}` ([docs/import-bundle.md](docs/import-bundle.md)) |
 | `club.sessions.start`, `club.sessions.interrupt` | | `unsupported` (`PROVIDER_UNAVAILABLE`): no provider in this build can |
 | `club.export`, `club.logins.browser.*` | | `unsupported`: not in this version |
@@ -221,6 +225,11 @@ Rules the core keeps:
 - **Assistant control** per account (`off`, `read`, `confirm`, `auto`; `off` by default, and for every imported
   account): what the Persona assistant may do with that account's agents. With nobody present (scheduled tasks,
   background follow-ups) the assistant may only read, whatever the level.
+- **Linking a Grok Bot's machine** (`club.grok_bot.takeover.*`, the 夷舍 button on a Grok Bot account): the bot is asked,
+  through its own session, to prepare its own machine as a Persona node (the node and its supervisor, the tailcat
+  pairing, the dedicated sshd). The hub's machine list is only described until `club.grok_bot.takeover.apply`, which
+  writes it after `plan` and never restarts the hub. A node already in the list is reported and left as it is. Nothing
+  in these calls carries a key, a token or an address.
 
 ## Layout
 

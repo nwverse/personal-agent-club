@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -83,7 +84,12 @@ func NewClub(version string, log *slog.Logger) (*core.Club, Host, error) {
 	if err := Configure(h, &opts, log); err != nil {
 		return nil, h, fmt.Errorf("storage: %w", err)
 	}
-	return core.New(opts), h, nil
+	club := core.New(opts)
+	club.SetTakeover(driveTakeover(club))
+	if home, err := os.UserHomeDir(); err == nil {
+		club.SetPersonaDir(filepath.Join(home, ".persona"))
+	}
+	return club, h, nil
 }
 
 // HTTPClient is the client providers use. Inside the hub's sandbox the only way out is the egress proxy the hub

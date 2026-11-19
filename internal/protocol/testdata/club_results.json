@@ -56,5 +56,18 @@
       "timezone": "",
       "extraArgs": []
     }
+  },
+  "takeover_plan": {
+    "planId": "p0123456789ab",
+    "summary": "add grok over ssh",
+    "node": "grok",
+    "kind": "ssh",
+    "host": "grok",
+    "alreadyLinked": false
+  },
+  "takeover_start": {
+    "takeoverId": "t0123456789ab",
+    "phase": "node",
+    "detail": "checking the box"
   }
 }

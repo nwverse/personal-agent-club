@@ -138,7 +138,7 @@ func groqLimits(limitReq, leftReq, limitTok, leftTok string) http.Header {
 	return h
 }
 
-// registry is the three API providers pointed at u.
+// registry is the API providers pointed at u.
 func (u *upstream) registry(demoEcho bool) (*provider.Registry, error) {
 	r := provider.NewRegistry(
 		cue.New(cue.Options{Origin: u.URL}),

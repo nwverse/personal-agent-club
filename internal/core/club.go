@@ -45,6 +45,13 @@ type Options struct {
 	// OnClose runs once, at the end of the first Close, when nothing the club runs is left: a shell releases there
 	// what OpenSpace opened (a data directory). A later or concurrent Close returns after it.
 	OnClose func()
+	// Takeover drives one step on a Grok Bot's own machine and returns the one line it answered. Nil means this build
+	// cannot (the takeover methods then say so). Tests set it; the extension shell sets the one that sends through the
+	// bot's own session.
+	Takeover func(ctx context.Context, accountID, step string) (string, error)
+	// PersonaDir is the hub user's ~/.persona, where the machine list lives. Empty means the hub side cannot be
+	// prepared. The bot never names this path.
+	PersonaDir string
 }
 
 // DefaultWatchLimit is how long a provider's push stays open after a send, at most.
@@ -97,6 +104,15 @@ func New(opts Options) *Club {
 
 // Registry is the club's providers.
 func (c *Club) Registry() *provider.Registry { return c.opts.Registry }
+
+// SetTakeover is how a takeover drives the Grok Bot's own machine. The extension shell sets it after New, because
+// the driver needs the club it drives.
+func (c *Club) SetTakeover(fn func(ctx context.Context, accountID, step string) (string, error)) {
+	c.opts.Takeover = fn
+}
+
+// SetPersonaDir is the hub user's ~/.persona, read when a takeover prepares the machine list.
+func (c *Club) SetPersonaDir(dir string) { c.opts.PersonaDir = dir }
 
 func (c *Club) now() int64 { return c.opts.Now().UnixMilli() }
 

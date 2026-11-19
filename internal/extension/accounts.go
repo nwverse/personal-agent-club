@@ -35,16 +35,19 @@ const (
 
 // Actions of the accounts UI.
 const (
-	actSync      = "sync"
-	actPause     = "pause"
-	actResume    = "resume"
-	actRemove    = "remove"
-	actPurge     = "purge"
-	actControl   = "control"
-	actPair      = "pair"
-	actGrokStart = "grok_start"
-	actGrokCheck = "grok_check"
-	actGrokStop  = "grok_cancel"
+	actSync        = "sync"
+	actPause       = "pause"
+	actResume      = "resume"
+	actRemove      = "remove"
+	actPurge       = "purge"
+	actControl     = "control"
+	actPair        = "pair"
+	actGrokStart   = "grok_start"
+	actGrokCheck   = "grok_check"
+	actGrokStop    = "grok_cancel"
+	actTakeover    = "takeover"
+	actTakeoverGo  = "takeover_go"
+	actTakeoverYes = "takeover_yes"
 )
 
 // Field names on the pages.
@@ -62,6 +65,7 @@ type pageState struct {
 	Provider string `json:"v,omitempty"`
 	Login    string `json:"l,omitempty"`
 	LoginURL string `json:"u,omitempty"`
+	Takeover string `json:"k,omitempty"`
 	Note     string `json:"n,omitempty"`
 	NoteTone string `json:"t,omitempty"`
 }
@@ -214,6 +218,17 @@ func (a *accounts) accountView(ctx context.Context, r *ext.UIRequest, l lang, st
 		actions.Items = append(actions.Items, wire.Component{Type: "button", Title: l.t("重新登录", "Sign in again"),
 			Action: &wire.Action{ID: "open", Push: &wire.Push{UI: AccountsUI, Title: providerName(l, grokBot),
 				State: ext.EncodeState(pageState{Page: pageGrok, Account: acct.AccountID})}}})
+		actions.Items = append(actions.Items, wire.Component{Type: "button", Title: l.t("夷舍", "Link its machine"),
+			Action: &wire.Action{ID: actTakeover, Confirm: l.t(
+				"夷舍会通过这个 Grok Bot 在它自己的机器上准备 Persona 节点。hub 的机器列表要等你确认后才会写，hub 也不会被重启。",
+				"This asks this Grok Bot to prepare its own machine as a Persona node. The hub's machine list is not written, and the hub is not restarted, until you confirm.")}})
+		if st.Takeover != "" {
+			actions.Items = append(actions.Items,
+				wire.Component{Type: "button", Title: l.t("查看夷舍进展", "Show linking progress"), Action: &wire.Action{ID: actTakeoverGo}},
+				wire.Component{Type: "button", Title: l.t("确认写入机器列表", "Confirm and write the machine list"), Action: &wire.Action{ID: actTakeoverYes,
+					Confirm: l.t("写入后这台机器会出现在 hub 的机器列表里。hub 不会被重启。", "This adds the machine to the hub's machine list. The hub is not restarted.")}},
+			)
+		}
 	}
 	actions.Items = append(actions.Items, []wire.Component{
 		{Type: "button", Title: l.t("解除配对", "Unpair"), Role: "destructive", Action: &wire.Action{ID: actRemove,
@@ -304,6 +319,22 @@ func (a *accounts) grokPending(l lang, st pageState) []wire.Component {
 		wire.Component{Type: "button", Title: l.t("取消", "Cancel"), Role: "destructive", Action: &wire.Action{ID: actGrokStop}})
 }
 
+// takeoverNote describes one takeover without ever quoting a secret: only the phase and whether the box is ready.
+func takeoverNote(l lang, st protocol.TakeoverStatus) string {
+	none := l.t("未就绪", "not ready")
+	done := l.t("就绪", "ready")
+	flag := func(ok bool) string {
+		if ok {
+			return done
+		}
+		return none
+	}
+	return l.t("夷舍进度：", "Linking: ") + st.Phase +
+		l.t("，节点", ", node ") + flag(st.Node) +
+		l.t("，配对", ", pairing ") + flag(st.Paired) +
+		l.t("，专用 ssh", ", ssh ") + flag(st.SSH)
+}
+
 func (a *accounts) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionResult, error) {
 	l := lang(r.Locale)
 	var st pageState
@@ -382,6 +413,56 @@ func (a *accounts) action(ctx context.Context, r *ext.UIRequest) (*wire.ActionRe
 		}
 		st = pageState{Page: pageGrok, Account: st.Account}
 		return done(l.t("已取消", "Canceled"))
+	case actTakeover:
+		var res protocol.TakeoverStart
+		if err := call(ctx, a.club, protocol.MethodClubGrokBotTakeoverStart, protocol.TakeoverStartParams{AccountID: st.Account}, &res); err != nil {
+			return failed(err, "")
+		}
+		st.Takeover = res.TakeoverID
+		return done(l.t("已开始夷舍，点「查看夷舍进展」看它走到哪一步。", "Linking started; use “show progress” to see how far it is."))
+	case actTakeoverGo:
+		if st.Takeover == "" {
+			return failed(protocol.Invalid(l.t("还没有开始夷舍", "linking has not been started")), "")
+		}
+		var status protocol.TakeoverStatus
+		if err := call(ctx, a.club, protocol.MethodClubGrokBotTakeoverStatus, protocol.TakeoverParams{TakeoverID: st.Takeover}, &status); err != nil {
+			return failed(err, "")
+		}
+		note := takeoverNote(l, status)
+		if status.Phase == "plan" || status.Phase == "linked" {
+			var plan protocol.TakeoverPlan
+			if err := call(ctx, a.club, protocol.MethodClubGrokBotTakeoverPlan, protocol.TakeoverParams{TakeoverID: st.Takeover}, &plan); err != nil {
+				return failed(err, "")
+			}
+			note += l.t("。计划：", ". Plan: ") + plan.Summary
+			if plan.AlreadyLinked {
+				note += l.t("。已接入，不会改动。", ". Already linked; nothing will change.")
+			} else {
+				note += l.t("。确认后才会写入机器列表。", ". The machine list is written only after you confirm.")
+			}
+		}
+		st.Note, st.NoteTone = note, wire.ToneNeutral
+		return &wire.ActionResult{View: a.view(ctx, r, st), Toast: note}, nil
+	case actTakeoverYes:
+		if st.Takeover == "" {
+			return failed(protocol.Invalid(l.t("还没有开始夷舍", "linking has not been started")), "")
+		}
+		// Showing the plan first is what marks it confirmed; writing never happens before that.
+		var plan protocol.TakeoverPlan
+		if err := call(ctx, a.club, protocol.MethodClubGrokBotTakeoverPlan, protocol.TakeoverParams{TakeoverID: st.Takeover}, &plan); err != nil {
+			return failed(err, "")
+		}
+		if plan.AlreadyLinked {
+			return done(l.t("已接入，不会改动。", "Already linked; nothing will change."))
+		}
+		var applied protocol.TakeoverApply
+		if err := call(ctx, a.club, protocol.MethodClubGrokBotTakeoverApply, protocol.TakeoverParams{TakeoverID: st.Takeover}, &applied); err != nil {
+			return failed(err, "")
+		}
+		if !applied.Applied {
+			return done(l.t("未写入：", "Not written: ") + applied.Detail)
+		}
+		return done(l.t("已写入机器列表，hub 没有重启。", "Written to the machine list; the hub was not restarted."))
 	}
 	return nil, nil
 }

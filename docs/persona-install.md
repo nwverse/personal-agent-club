@@ -86,7 +86,10 @@ sync and last error, and pairs new ones:
 - **Cue** and **Groq**: paste an API key. The key field is a secret field: the apps never show it, the extension
   cannot fill it in, and the extension never shows, returns or logs a saved key.
 - **Grok Bot**: start the sign-in, approve on the page that opens in your browser, and the page checks the result every
-  30 seconds (or at once with *check now*).
+  30 seconds (or at once with *check now*). On a paired Grok Bot account, **夷舍** (Link its machine) asks that bot to
+  prepare its own machine as a Persona node. Nothing is written on the hub until you press *Confirm and write the
+  machine list*, which asks again first; the hub is not restarted. A machine already linked is reported and left as it
+  is.
 
 An account's page syncs it now, pauses or resumes its syncing, unpairs it (keeping or deleting its sessions and
 messages) and sets its **assistant control**. When the club behind the page cannot do something yet, the page says

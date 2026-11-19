@@ -115,6 +115,14 @@ func (s *Space) callClub(ctx context.Context, method string, params json.RawMess
 		return call(params, func(p protocol.LoginParams) (any, error) { return s.PollGrokBotLogin(ctx, p) })
 	case protocol.MethodClubLoginsGrokBotCancel:
 		return call(params, func(p protocol.LoginParams) (any, error) { return protocol.Empty{}, s.CancelGrokBotLogin(ctx, p) })
+	case protocol.MethodClubGrokBotTakeoverStart:
+		return call(params, func(p protocol.TakeoverStartParams) (any, error) { return s.StartTakeover(ctx, p) })
+	case protocol.MethodClubGrokBotTakeoverStatus:
+		return call(params, func(p protocol.TakeoverParams) (any, error) { return s.TakeoverStatus(ctx, p) })
+	case protocol.MethodClubGrokBotTakeoverPlan:
+		return call(params, func(p protocol.TakeoverParams) (any, error) { return s.TakeoverPlan(ctx, p) })
+	case protocol.MethodClubGrokBotTakeoverApply:
+		return call(params, func(p protocol.TakeoverParams) (any, error) { return s.ApplyTakeover(ctx, p) })
 	case protocol.MethodClubImport:
 		return call(params, func(p protocol.ImportParams) (any, error) {
 			return s.Import(ctx, p.Path, ImportOptions{OnlyProviders: p.OnlyProviders, DryRun: p.DryRun})

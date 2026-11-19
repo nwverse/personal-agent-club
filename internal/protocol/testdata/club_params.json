@@ -34,6 +34,12 @@
       ]
     }
   },
+  "takeover": {
+    "takeover_id": "t0123456789ab"
+  },
+  "takeover_start": {
+    "account_id": "a0123456789ab"
+  },
   "update": {
     "account_id": "a0123456789ab",
     "paused": true,
